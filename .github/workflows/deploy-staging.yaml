@@ -1,0 +1,53 @@
+name: Deploy Order Service
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # JOB 1: Build & Push (Runs on GitHub Cloud Servers - FREE CPU/RAM)
+  build-and-push:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker Auth
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build & Push Docker Image
+        run: |
+          IMAGE="${{ secrets.GCP_AR_REPO }}/order-service:staging"
+          docker build -t $IMAGE .
+          docker push $IMAGE
+
+  # JOB 2: Deploy (Runs on Staging VM)
+  deploy:
+    needs: build-and-push
+    runs-on: [self-hosted, staging]
+    environment: staging
+    steps:
+
+      - name: Pull and Restart Container
+        run: |
+          cd /opt/omni-infra/apps
+          
+          # Export the AR Repo URL so docker-compose can use it
+          export GCP_AR_REPO="${{ secrets.GCP_AR_REPO }}"
+          
+          # Ensure VM Docker is authenticated to pull from AR
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+          
+          # Pull the new image and restart only order-service
+          sudo docker compose -f docker-compose.yml pull order-service
+          sudo docker compose -f docker-compose.yml up -d --no-deps order-service
+          sudo docker image prune -f -a
