@@ -2,18 +2,14 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install openssl for Prisma
 RUN apk add --no-cache openssl
 
-# Install all dependencies (including dev)
 COPY package*.json ./
 RUN npm install
 
-# Copy Prisma schema and generate client
 COPY prisma ./prisma/
 RUN npx prisma generate
 
-# Copy source code and build
 COPY . .
 RUN npm run build
 
@@ -21,24 +17,16 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 
-# Install openssl for Prisma and Infisical CLI
-RUN apk add --no-cache openssl bash wget \
-    && wget -qO- 'https://artifacts-cli.infisical.com/setup.apk.sh' | sh \
-    && apk add --no-cache infisical
+RUN apk add --no-cache openssl bash
 
-# Install production dependencies only
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copy generated Prisma Client and Prisma CLI from builder
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
-# Copy built application
 COPY --from=builder /app/dist ./dist
-
-# Copy Prisma schema and migrations for auto-migration
 COPY --from=builder /app/prisma ./prisma
 
 COPY entrypoint.sh /entrypoint.sh
