@@ -38,14 +38,14 @@ jobs:
     steps:
 
       - name: Pull and Restart Container
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GCP_AR_REPO: ${{ secrets.GCP_AR_REPO }}
         run: |
           cd /opt/omni-infra/apps
           
-          # Export the AR Repo URL so docker-compose can use it
-          export GCP_AR_REPO="${{ secrets.GCP_AR_REPO }}"
-          
-          # Ensure VM Docker is authenticated to pull from AR
-          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+          # Authenticate root docker with GCP Artifact Registry using Service Account Key
+          echo "$GCP_SA_KEY" | sudo docker login -u _json_key --password-stdin https://us-central1-docker.pkg.dev
           
           # Pull the new image and restart only order-service
           sudo docker compose -f docker-compose.yml pull order-service
